@@ -4,6 +4,8 @@ import com.typesafe.scalalogging.LazyLogging
 import io.circe.Decoder
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.configuration.{CheckpointingOptions, Configuration}
+import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings
+import org.apache.flink.runtime.minicluster.{MiniCluster, MiniClusterConfiguration}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
 import org.apache.flink.streaming.connectors.kafka.internals.KafkaDeserializationSchemaWrapper
@@ -21,6 +23,7 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
 
   final def analyze(): Unit = {
     val checkpointDir = "/Users/rzk91/Documents/Work/Git/flink-checkpoints-test/checkpoints"
+    val savepointDir = s"$checkpointDir/83a2af1520c2eab7ac48971393867aeb/chk-3"
 
     val flinkConfig: Configuration = {
       val conf = new Configuration()
@@ -34,6 +37,14 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
       conf
     }
 
+    val cluster = new MiniCluster(
+      new MiniClusterConfiguration.Builder()
+        .setConfiguration(flinkConfig)
+        .build()
+    )
+
+    cluster.start()
+
     val env: StreamExecutionEnvironment =
       StreamExecutionEnvironment.createLocalEnvironment(1, flinkConfig)
 
@@ -42,10 +53,15 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
       .name("Logger Output")
       .uid("logger-output")
 
-    env.execute()
+    val jobGraph = env.getStreamGraph.getJobGraph
+    jobGraph.setSavepointRestoreSettings(
+      SavepointRestoreSettings.forPath(savepointDir)
+    )
+
+    cluster.submitJob(jobGraph)
   }
 
-  private def events(env: StreamExecutionEnvironment): DataStream[IN] = {
+  protected def events(env: StreamExecutionEnvironment): DataStream[IN] = {
     val consumer = new FlinkKafkaConsumer[IN](
       kafkaTopic,
       new KafkaDeserializationSchemaWrapper[IN](new JsonDeserializer[IN]), {
