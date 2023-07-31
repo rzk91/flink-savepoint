@@ -2,16 +2,16 @@ package code
 
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.Decoder
+import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
+import org.apache.flink.api.common.eventtime.WatermarkStrategy
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.configuration.{CheckpointingOptions, Configuration}
+import org.apache.flink.configuration.{CheckpointingOptions, Configuration, StateBackendOptions}
+import org.apache.flink.connector.kafka.source.KafkaSource
 import org.apache.flink.runtime.jobgraph.SavepointRestoreSettings
 import org.apache.flink.runtime.minicluster.{MiniCluster, MiniClusterConfiguration}
-import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
-import org.apache.flink.streaming.connectors.kafka.internals.KafkaDeserializationSchemaWrapper
 import org.apache.kafka.clients.consumer.ConsumerConfig
 
-import java.util.Properties
+import java.nio.file.{Files, Path}
 
 abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
     extends LazyLogging
@@ -23,11 +23,12 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
 
   final def analyze(): Unit = {
     val checkpointDir = "/Users/rzk91/Documents/Work/Git/flink-checkpoints-test/checkpoints"
-    val savepointDir = s"$checkpointDir/83a2af1520c2eab7ac48971393867aeb/chk-3"
+    val savepointDir = Option(Path.of(s"$checkpointDir/83a2af1520c2eab7ac48971393867aeb/chk-3"))
+      .filter(Files.exists(_))
 
     val flinkConfig: Configuration = {
       val conf = new Configuration()
-      conf.setString(CheckpointingOptions.STATE_BACKEND, "filesystem")
+      conf.setString(StateBackendOptions.STATE_BACKEND, "filesystem")
       conf.setString(CheckpointingOptions.CHECKPOINTS_DIRECTORY, s"file://$checkpointDir")
       conf.setString("execution.checkpointing.interval", "5s")
       conf.setString(
@@ -54,29 +55,30 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
       .uid("logger-output")
 
     val jobGraph = env.getStreamGraph.getJobGraph
+
     jobGraph.setSavepointRestoreSettings(
-      SavepointRestoreSettings.forPath(savepointDir)
+      savepointDir
+        .fold(SavepointRestoreSettings.none())(
+          path => SavepointRestoreSettings.forPath(path.toUri.toString)
+        )
     )
 
     cluster.submitJob(jobGraph)
   }
 
   protected def events(env: StreamExecutionEnvironment): DataStream[IN] = {
-    val consumer = new FlinkKafkaConsumer[IN](
-      kafkaTopic,
-      new KafkaDeserializationSchemaWrapper[IN](new JsonDeserializer[IN]), {
-        val props = new Properties
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092")
-        props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kafka-reader-savepoints-2")
-        props.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-        props
-      }
-    )
+    val consumer = KafkaSource
+      .builder[IN]
+      .setBootstrapServers("localhost:9092")
+      .setTopics(kafkaTopic)
+      .setGroupId("kafka-reader-savepoints-new")
+      .setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+      .setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+      .setValueOnlyDeserializer(new JsonDeserializer[IN])
+      .build()
 
     env
-      .addSource(consumer)
-      .name("Event Source")
+      .fromSource(consumer, WatermarkStrategy.noWatermarks[IN], "Event Source")
       .uid("event-source")
   }
 

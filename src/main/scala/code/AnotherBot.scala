@@ -2,8 +2,8 @@ package code
 
 import code.FlinkOps.RichDataStream
 import io.circe.generic.auto._
-import org.apache.flink.api.scala.createTypeInformation
-import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
+import io.findify.flinkadt.api._
 
 object AnotherBot extends AnalyticsBot[KeyValue[Int], KeyValue[Int]] {
 
@@ -13,12 +13,11 @@ object AnotherBot extends AnalyticsBot[KeyValue[Int], KeyValue[Int]] {
 
   override protected def analyzeAllEvents(
     eventStream: DataStream[KeyValue[Int]]
-  ): DataStream[KeyValue[Int]] = {
+  ): DataStream[KeyValue[Int]] =
     eventStream
       .debug(logger = logger.debug(_))
       .name("Debugger")
       .uid("debugger")
-  }
 
   override protected def events(env: StreamExecutionEnvironment): DataStream[KeyValue[Int]] =
     env

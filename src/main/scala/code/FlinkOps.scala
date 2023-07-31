@@ -1,12 +1,12 @@
 package code
 
+import io.findify.flink.api.{DataStream, KeyedStream}
 import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.DataSet
 import org.apache.flink.api.java.functions.KeySelector
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable
 import org.apache.flink.streaming.api.datastream.{KeyedStream => JavaKeyedStream}
-import org.apache.flink.streaming.api.scala.{DataStream, KeyedStream}
 
 object FlinkOps {
 

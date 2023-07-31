@@ -2,11 +2,11 @@ package code
 
 import code.FlinkOps.RichDataStream
 import io.circe.generic.auto._
+import io.findify.flink.api.DataStream
+import io.findify.flinkadt.api._
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
 import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.scala.createTypeInformation
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction
-import org.apache.flink.streaming.api.scala.DataStream
 import org.apache.flink.util.Collector
 
 object TestBot
@@ -16,6 +16,9 @@ object TestBot
     ] {
 
   override val kafkaTopic: String = "another-test"
+
+  implicit val typeInfoKeyString: TypeInformation[KeyValue[String]] =
+    TypeInformation.of(classOf[KeyValue[String]])
 
   def main(args: Array[String]): Unit = analyze()
 
