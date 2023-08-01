@@ -1,5 +1,6 @@
-package code
+package code.bots
 
+import code.common.KeyValue
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 

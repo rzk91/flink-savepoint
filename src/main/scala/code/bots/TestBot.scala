@@ -1,8 +1,9 @@
-package code
+package code.bots
 
-import code.FlinkOps.RichDataStream
+import code.common.{GenericKeyValue, KeyValue}
+import code.util.extensionmethods.RichDataStream
 import io.circe.generic.auto._
-import io.findify.flink.api.DataStream
+import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
 import io.findify.flinkadt.api._
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
 import org.apache.flink.api.common.typeinfo.TypeInformation
@@ -15,7 +16,7 @@ object TestBot
       GenericKeyValue[KeyValue[String], Double]
     ] {
 
-  override val kafkaTopic: String = "another-test"
+  override val kafkaTopic: String = "flink117-test"
 
   implicit val typeInfoKeyString: TypeInformation[KeyValue[String]] =
     TypeInformation.of(classOf[KeyValue[String]])
@@ -24,6 +25,8 @@ object TestBot
 
   override protected def analyzeAllEvents(
     eventStream: DataStream[GenericKeyValue[KeyValue[String], Int]]
+  )(
+    implicit env: StreamExecutionEnvironment
   ): DataStream[GenericKeyValue[KeyValue[String], Double]] =
     eventStream
       .debug(logger = logger.debug(_))
@@ -61,7 +64,7 @@ object TestBot
       count.update(count.value + 1)
       sum.update(sum.value + gkv.value)
 
-      out.collect(GenericKeyValue(ctx.getCurrentKey, sum.value / count.value.toDouble))
+      out.collect(gkv.copy(key = ctx.getCurrentKey, value = sum.value / count.value.toDouble))
     }
   }
 }

@@ -1,5 +1,6 @@
-package code
+package code.util
 
+import code.common.TimestampedObject
 import io.findify.flink.api.{DataStream, KeyedStream}
 import org.apache.flink.api.common.functions.MapFunction
 import org.apache.flink.api.common.typeinfo.TypeInformation
@@ -8,7 +9,10 @@ import org.apache.flink.api.java.functions.KeySelector
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable
 import org.apache.flink.streaming.api.datastream.{KeyedStream => JavaKeyedStream}
 
-object FlinkOps {
+import java.time.{Duration => JDuration}
+import scala.concurrent.duration.FiniteDuration
+
+object extensionmethods {
 
   implicit class RichDataStream[A](private val stream: DataStream[A]) extends AnyVal {
 
@@ -48,5 +52,12 @@ object FlinkOps {
       }
 
     def void(): Unit = dataset.collect.clear()
+  }
+
+  implicit def durationToJavaDuration(duration: FiniteDuration): JDuration =
+    JDuration.of(duration.length, duration.unit.toChronoUnit)
+
+  implicit class TimestampedObjectOps[A](private val obj: A) extends AnyVal {
+    def timestamp(implicit timedObj: TimestampedObject[A]): Long = timedObj.timestamp(obj)
   }
 }

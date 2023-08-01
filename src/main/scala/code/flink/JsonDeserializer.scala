@@ -1,4 +1,4 @@
-package code
+package code.flink
 
 import io.circe.Decoder
 import io.circe.parser._

@@ -1,36 +1,33 @@
-package code
+package code.savepoint
 
-import code.FlinkOps.RichDataStream
+import code.common.KeyValue
+import code.util.extensionmethods.RichDataStream
 import com.typesafe.scalalogging.LazyLogging
-import io.findify.flink.api.DataStream
+import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
 import io.findify.flinkadt.api._
 import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.configuration.Configuration
-import org.apache.flink.runtime.state.StateBackend
-import org.apache.flink.runtime.state.hashmap.HashMapStateBackend
 import org.apache.flink.state.api.functions.KeyedStateReaderFunction
-import org.apache.flink.state.api.{OperatorIdentifier, SavepointReader}
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
+import org.apache.flink.state.api.{OperatorIdentifier, SavepointReader, SavepointWriter}
 import org.apache.flink.util.Collector
 
-object TestBotStateReader extends LazyLogging {
+object TestBotStateReader extends SavepointManager with LazyLogging {
 
-  def main(args: Array[String]): Unit = {
-    val checkpointDir =
-      "file:///Users/rzk91/Documents/Work/Git/flink-checkpoints-test/checkpoints/0405b46983d94f92da8e5524e3b52138/chk-1"
-    val env = StreamExecutionEnvironment.getExecutionEnvironment
-    val backend: StateBackend = new HashMapStateBackend()
+  override val checkpointDir: String = "cbab1558931def8a458a4ea89ce6134c/chk-9"
+  def main(args: Array[String]): Unit = analyze()
 
-    val savepoint = SavepointReader.read(env, checkpointDir, backend)
-
+  override def processSavepoint(
+    savepoint: SavepointReader
+  )(implicit env: StreamExecutionEnvironment): Option[SavepointWriter] = {
     new DataStream(
       savepoint
         .readKeyedState(OperatorIdentifier.forUid("aggregate"), new ReaderFunction)
-    ).debug(logger = logger.debug(_))
+    ).uid("state-source")
+      .debug(logger = logger.debug(_))
       .uid("debugger")
 
-    env.execute()
+    None
   }
 
   class ReaderFunction extends KeyedStateReaderFunction[KeyValue[String], KeyValue[String]] {

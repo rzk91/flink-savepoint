@@ -1,4 +1,4 @@
-package code
+package code.flink
 
 import com.typesafe.scalalogging.Logger
 import org.apache.flink.streaming.api.functions.sink.SinkFunction

@@ -1,5 +1,8 @@
-package code
+package code.bots
 
+import code.common.TimestampedObject
+import code.flink.{JsonDeserializer, LoggerSink, SimpleTimestampAssigner}
+import code.util.extensionmethods._
 import com.typesafe.scalalogging.LazyLogging
 import io.circe.Decoder
 import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
@@ -12,14 +15,17 @@ import org.apache.flink.runtime.minicluster.{MiniCluster, MiniClusterConfigurati
 import org.apache.kafka.clients.consumer.ConsumerConfig
 
 import java.nio.file.{Files, Path}
+import scala.concurrent.duration.DurationInt
 
-abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
+abstract class AnalyticsBot[IN: Decoder: TypeInformation: TimestampedObject, OUT: TypeInformation]
     extends LazyLogging
     with Serializable {
 
   def kafkaTopic: String
 
-  protected def analyzeAllEvents(eventStream: DataStream[IN]): DataStream[OUT]
+  protected def analyzeAllEvents(eventStream: DataStream[IN])(
+    implicit env: StreamExecutionEnvironment
+  ): DataStream[OUT]
 
   final def analyze(): Unit = {
     val checkpointDir = "/Users/rzk91/Documents/Work/Git/flink-checkpoints-test/checkpoints"
@@ -46,10 +52,10 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
 
     cluster.start()
 
-    val env: StreamExecutionEnvironment =
+    implicit val env: StreamExecutionEnvironment =
       StreamExecutionEnvironment.createLocalEnvironment(1, flinkConfig)
 
-    analyzeAllEvents(events(env))
+    analyzeAllEvents(events)
       .addSink(new LoggerSink[OUT](logger, "error"))
       .name("Logger Output")
       .uid("logger-output")
@@ -66,7 +72,7 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
     cluster.submitJob(jobGraph)
   }
 
-  protected def events(env: StreamExecutionEnvironment): DataStream[IN] = {
+  protected def events(implicit env: StreamExecutionEnvironment): DataStream[IN] = {
     val consumer = KafkaSource
       .builder[IN]
       .setBootstrapServers("localhost:9092")
@@ -78,7 +84,14 @@ abstract class AnalyticsBot[IN: Decoder: TypeInformation, OUT: TypeInformation]
       .build()
 
     env
-      .fromSource(consumer, WatermarkStrategy.noWatermarks[IN], "Event Source")
+      .fromSource(
+        consumer,
+        WatermarkStrategy
+          .forMonotonousTimestamps[IN]
+          .withTimestampAssigner(new SimpleTimestampAssigner[IN])
+          .withIdleness(10.seconds),
+        "Event Source"
+      )
       .uid("event-source")
   }
 
