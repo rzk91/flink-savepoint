@@ -1,33 +1,27 @@
 package code.bots
 
-import code.common.{GenericKeyValue, KeyValue}
+import code._
+import code.util.FlinkStateHelper
 import code.util.extensionmethods.RichDataStream
 import io.circe.generic.auto._
 import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
 import io.findify.flinkadt.api._
-import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
+import org.apache.flink.api.common.state.ValueState
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction
 import org.apache.flink.util.Collector
 
-object TestBot
-    extends AnalyticsBot[
-      GenericKeyValue[KeyValue[String], Int],
-      GenericKeyValue[KeyValue[String], Double]
-    ] {
+object TestBot extends AnalyticsBot[GenericKVStringInt, GenericKVStringDouble] {
 
   override val kafkaTopic: String = "flink117-test"
 
-  implicit val typeInfoKeyString: TypeInformation[KeyValue[String]] =
-    TypeInformation.of(classOf[KeyValue[String]])
+  implicit val typeInfoKeyString: TypeInformation[KVString] = TypeInformation.of(classOf[KVString])
 
   def main(args: Array[String]): Unit = analyze()
 
   override protected def analyzeAllEvents(
-    eventStream: DataStream[GenericKeyValue[KeyValue[String], Int]]
-  )(
-    implicit env: StreamExecutionEnvironment
-  ): DataStream[GenericKeyValue[KeyValue[String], Double]] =
+    eventStream: DataStream[GenericKVStringInt]
+  )(implicit env: StreamExecutionEnvironment): DataStream[GenericKVStringDouble] =
     eventStream
       .debug(logger = logger.debug(_))
       .uid("debugger")
@@ -36,26 +30,16 @@ object TestBot
       .uid("aggregate")
 
   class CustomAggregationFunction
-      extends KeyedProcessFunction[KeyValue[String], GenericKeyValue[KeyValue[String], Int], GenericKeyValue[
-        KeyValue[String],
-        Double
-      ]] {
+      extends KeyedProcessFunction[KVString, GenericKVStringInt, GenericKVStringDouble]
+      with FlinkStateHelper {
 
-    lazy val sum: ValueState[Int] = getRuntimeContext.getState(
-      new ValueStateDescriptor[Int]("sum", implicitly[TypeInformation[Int]])
-    )
-
-    lazy val count: ValueState[Int] = getRuntimeContext.getState(
-      new ValueStateDescriptor[Int]("count", implicitly[TypeInformation[Int]])
-    )
+    lazy val sum: ValueState[Int] = valueState("sum")
+    lazy val count: ValueState[Int] = valueState("count")
 
     override def processElement(
-      gkv: GenericKeyValue[KeyValue[String], Int],
-      ctx: KeyedProcessFunction[KeyValue[String], GenericKeyValue[KeyValue[String], Int], GenericKeyValue[
-        KeyValue[String],
-        Double
-      ]]#Context,
-      out: Collector[GenericKeyValue[KeyValue[String], Double]]
+      gkv: GenericKVStringInt,
+      ctx: KeyedProcessFunction[KVString, GenericKVStringInt, GenericKVStringDouble]#Context,
+      out: Collector[GenericKVStringDouble]
     ): Unit = {
       logger.debug(
         s"[${ctx.getCurrentKey}] Current state values: sum = ${sum.value}, count = ${count.value}"

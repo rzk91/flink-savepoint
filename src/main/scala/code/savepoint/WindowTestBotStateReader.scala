@@ -4,9 +4,9 @@ import code._
 import code.bots.WindowTestBot.typeInfoKeyString
 import code.common.{GenericKeyValue, KeyValue, ValueCount}
 import code.flink.{CountAggregateFunction, TumblingZonedEventTimeWindows}
-import code.util.extensionmethods.RichDataStream
+import code.util.extensionmethods._
 import com.typesafe.scalalogging.LazyLogging
-import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
+import io.findify.flink.api.StreamExecutionEnvironment
 import io.findify.flinkadt.api._
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.state.api.functions.WindowReaderFunction
@@ -27,25 +27,25 @@ object WindowTestBotStateReader extends SavepointManager with LazyLogging {
   override def processSavepoint(
     savepoint: SavepointReader
   )(implicit env: StreamExecutionEnvironment): Option[SavepointWriter] = {
-    new DataStream(
-      savepoint
-        .window(
-          TumblingZonedEventTimeWindows(
-            20.seconds,
-            (gkv: GenericKeyValue[KeyValue[String], Int]) => gkv.key
-          )
+    savepoint
+      .window(
+        TumblingZonedEventTimeWindows(
+          20.seconds,
+          (gkv: GenericKeyValue[KeyValue[String], Int]) => gkv.key
         )
-        .aggregate(
-          "aggregate",
-          new CountAggregateFunction[GenericKVStringInt, GenericKVStringDouble](
-            acc => acc.value.copy(value = acc.value.value / acc.count.toDouble)
-          ),
-          new WindowStateReader,
-          implicitly[TypeInformation[KVString]],
-          implicitly[TypeInformation[ValueCount[GenericKVStringInt]]],
-          implicitly[TypeInformation[GenericKVStringDouble]]
-        )
-    ).uid("state-reader")
+      )
+      .aggregate(
+        "aggregate",
+        new CountAggregateFunction[GenericKVStringInt, GenericKVStringDouble](
+          acc => acc.value.copy(value = acc.value.value / acc.count.toDouble)
+        ),
+        new WindowStateReader,
+        implicitly[TypeInformation[KVString]],
+        implicitly[TypeInformation[ValueCount[GenericKVStringInt]]],
+        implicitly[TypeInformation[GenericKVStringDouble]]
+      )
+      .toScalaStream
+      .uid("state-reader")
       .debug(logger = logger.debug(_))
       .uid("debugger")
 

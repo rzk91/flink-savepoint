@@ -7,7 +7,10 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.java.DataSet
 import org.apache.flink.api.java.functions.KeySelector
 import org.apache.flink.api.java.typeutils.ResultTypeQueryable
-import org.apache.flink.streaming.api.datastream.{KeyedStream => JavaKeyedStream}
+import org.apache.flink.streaming.api.datastream.{
+  DataStream => JavaDataStream,
+  KeyedStream => JavaKeyedStream
+}
 
 import java.time.{Duration => JDuration}
 import scala.concurrent.duration.FiniteDuration
@@ -36,6 +39,10 @@ object extensionmethods {
     }
   }
 
+  implicit class RichJavaDataStream[A](private val javaDataStream: JavaDataStream[A]) extends AnyVal {
+    def toScalaStream: DataStream[A] = new DataStream[A](javaDataStream)
+  }
+
   implicit class RichDataSet[A](private val dataset: DataSet[A]) extends AnyVal {
 
     def debug(
@@ -60,4 +67,5 @@ object extensionmethods {
   implicit class TimestampedObjectOps[A](private val obj: A) extends AnyVal {
     def timestamp(implicit timedObj: TimestampedObject[A]): Long = timedObj.timestamp(obj)
   }
+
 }

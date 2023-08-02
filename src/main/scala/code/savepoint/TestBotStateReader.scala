@@ -1,12 +1,12 @@
 package code.savepoint
 
-import code.common.KeyValue
-import code.util.extensionmethods.RichDataStream
+import code._
+import code.util.FlinkStateHelper
+import code.util.extensionmethods._
 import com.typesafe.scalalogging.LazyLogging
-import io.findify.flink.api.{DataStream, StreamExecutionEnvironment}
+import io.findify.flink.api.StreamExecutionEnvironment
 import io.findify.flinkadt.api._
-import org.apache.flink.api.common.state.{ValueState, ValueStateDescriptor}
-import org.apache.flink.api.common.typeinfo.TypeInformation
+import org.apache.flink.api.common.state.ValueState
 import org.apache.flink.configuration.Configuration
 import org.apache.flink.state.api.functions.KeyedStateReaderFunction
 import org.apache.flink.state.api.{OperatorIdentifier, SavepointReader, SavepointWriter}
@@ -20,34 +20,30 @@ object TestBotStateReader extends SavepointManager with LazyLogging {
   override def processSavepoint(
     savepoint: SavepointReader
   )(implicit env: StreamExecutionEnvironment): Option[SavepointWriter] = {
-    new DataStream(
-      savepoint
-        .readKeyedState(OperatorIdentifier.forUid("aggregate"), new ReaderFunction)
-    ).uid("state-source")
+    savepoint
+      .readKeyedState(OperatorIdentifier.forUid("aggregate"), new ReaderFunction)
+      .toScalaStream
+      .uid("state-source")
       .debug(logger = logger.debug(_))
       .uid("debugger")
 
     None
   }
 
-  class ReaderFunction extends KeyedStateReaderFunction[KeyValue[String], KeyValue[String]] {
+  class ReaderFunction extends KeyedStateReaderFunction[KVString, KVString] with FlinkStateHelper {
 
     var sum: ValueState[Int] = _
     var count: ValueState[Int] = _
 
     override def open(parameters: Configuration): Unit = {
-      sum = getRuntimeContext.getState(
-        new ValueStateDescriptor[Int]("sum", implicitly[TypeInformation[Int]])
-      )
-      count = getRuntimeContext.getState(
-        new ValueStateDescriptor[Int]("count", implicitly[TypeInformation[Int]])
-      )
+      sum = valueState("sum")
+      count = valueState("count")
     }
 
     override def readKey(
-      key: KeyValue[String],
+      key: KVString,
       ctx: KeyedStateReaderFunction.Context,
-      out: Collector[KeyValue[String]]
+      out: Collector[KVString]
     ): Unit = {
       logger.debug(
         s"[$key] State variables: " +
